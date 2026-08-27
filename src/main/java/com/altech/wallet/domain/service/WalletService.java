@@ -114,7 +114,7 @@ public class WalletService {
     }
 
     @Transactional
-    public void transfer(String fromPlayerId, String toPlayerId, BigDecimal amount, String description) {
+    public void transfer(String fromPlayerId, String toPlayerId, BigDecimal amount) {
         if (fromPlayerId.equals(toPlayerId)) {
             throw new IllegalArgumentException("Cannot transfer funds to the same player");
         }
@@ -127,10 +127,10 @@ public class WalletService {
         walletRepository.findByPlayerIdWithPessimisticLock(secondId);
 
         // Debit source wallet
-        debit(fromPlayerId, amount, TransactionReason.PLAYER_TRANSFER, toPlayerId.toString(), "Transfer to " + toPlayerId);
+        debit(fromPlayerId, amount, TransactionReason.PLAYER_TRANSFER, toPlayerId, "Transfer to " + toPlayerId);
 
         // Credit target wallet
-        credit(toPlayerId, amount, TransactionReason.PLAYER_TRANSFER, fromPlayerId.toString(), "Transfer from " + fromPlayerId);
+        credit(toPlayerId, amount, TransactionReason.PLAYER_TRANSFER, fromPlayerId, "Transfer from " + fromPlayerId);
     }
 
     @Transactional(readOnly = true)
