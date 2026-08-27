@@ -12,12 +12,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface WalletRepository extends JpaRepository<Wallet, UUID> {
+public interface WalletRepository extends JpaRepository<Wallet, String> {
 
-    Optional<Wallet> findByPlayerId(UUID playerId);
+    Optional<Wallet> findByPlayerId(String playerId);
 
     // Acquires row-level lock (SELECT ... FOR UPDATE) to prevent double-spending
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM Wallet w WHERE w.playerId = :playerId")
-    Optional<Wallet> findByPlayerIdWithPessimisticLock(@Param("playerId") UUID playerId);
+    Optional<Wallet> findByPlayerIdWithPessimisticLock(@Param("playerId") String playerId);
 }

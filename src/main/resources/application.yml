@@ -1,19 +1,29 @@
 spring:
   application:
     name: wallet-ledger
+  flyway:
+    enabled: false
+
   datasource:
     url: jdbc:postgresql://localhost:5432/wallet_db
     username: wallet_user
     password: wallet_password
     driver-class-name: org.postgresql.Driver
+
   jpa:
+    # Use 'validate' to enforce that Java @Entity annotations strictly match schema.sql
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Ensures Spring Boot executes schema.sql on startup
+  sql:
+    init:
+      mode: always
 
 server:
   port: 8080

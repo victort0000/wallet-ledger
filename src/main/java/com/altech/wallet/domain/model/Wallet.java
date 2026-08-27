@@ -19,7 +19,7 @@ public class Wallet {
     private UUID id;
 
     @Column(nullable = false, unique = true)
-    private UUID playerId;
+    private String playerId;
 
     @Column(nullable = false, precision = 18, scale = 4)
     private BigDecimal balance;

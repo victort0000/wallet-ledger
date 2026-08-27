@@ -26,11 +26,11 @@ public class WalletConcurrencyTest {
     @Autowired
     private WalletRepository walletRepository;
 
-    private UUID playerId;
+    private String playerId;
 
     @BeforeEach
     void setup() {
-        playerId = UUID.randomUUID();
+        playerId = "WalletConcurrencyTest";
         // Credit initial $100
         walletService.credit(playerId, new BigDecimal("100.00"), TransactionReason.ADMIN_ADJUSTMENT, "INIT", "Initial setup");
     }

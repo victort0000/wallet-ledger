@@ -3,11 +3,17 @@ package com.altech.wallet.domain.service;
 import com.altech.wallet.domain.model.*;
 import com.altech.wallet.domain.repository.WalletRepository;
 import com.altech.wallet.domain.repository.WalletTransactionRepository;
+import com.altech.wallet.web.dto.AuditResponse;
+import com.altech.wallet.web.dto.BalanceResponse;
+import com.altech.wallet.web.exception.WalletNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -18,7 +24,7 @@ public class WalletService {
     private final WalletTransactionRepository transactionRepository;
 
     @Transactional
-    public WalletTransaction credit(UUID playerId, BigDecimal amount, TransactionReason reason, String referenceId, String description) {
+    public WalletTransaction credit(String playerId, BigDecimal amount, TransactionReason reason, String referenceId, String description) {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Credit amount must be positive");
         }
@@ -45,7 +51,7 @@ public class WalletService {
     }
 
     @Transactional
-    public WalletTransaction debit(UUID playerId, BigDecimal amount, TransactionReason reason, String referenceId, String description) {
+    public WalletTransaction debit(String playerId, BigDecimal amount, TransactionReason reason, String referenceId, String description) {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Debit amount must be positive");
         }
@@ -75,7 +81,7 @@ public class WalletService {
         return transactionRepository.save(tx);
     }
 
-    private Wallet createWalletForPlayer(UUID playerId) {
+    private Wallet createWalletForPlayer(String playerId) {
         Wallet newWallet = Wallet.builder()
                 .id(UUID.randomUUID())
                 .playerId(playerId)
@@ -83,5 +89,69 @@ public class WalletService {
                 .currency("USD")
                 .build();
         return walletRepository.save(newWallet);
+    }
+    @Transactional(readOnly = true)
+    public BalanceResponse getBalance(String playerId) {
+        Wallet wallet = walletRepository.findByPlayerId(playerId)
+                .orElseThrow(() -> new WalletNotFoundException("Wallet not found for player: " + playerId));
+
+        return BalanceResponse.builder()
+                .walletId(wallet.getId())
+                .playerId(wallet.getPlayerId())
+                .balance(wallet.getBalance())
+                .reservedBalance(BigDecimal.ZERO)
+                .currency(wallet.getCurrency())
+                .updatedAt(wallet.getUpdatedAt())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<WalletTransaction> getTransactionHistory(String playerId, Pageable pageable) {
+        Wallet wallet = walletRepository.findByPlayerId(playerId)
+                .orElseThrow(() -> new WalletNotFoundException("Wallet not found for player: " + playerId));
+
+        return transactionRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId(), pageable);
+    }
+
+    @Transactional
+    public void transfer(String fromPlayerId, String toPlayerId, BigDecimal amount, String description) {
+        if (fromPlayerId.equals(toPlayerId)) {
+            throw new IllegalArgumentException("Cannot transfer funds to the same player");
+        }
+
+        // Lock wallets in deterministic order (by UUID) to avoid deadlocks
+        String firstId = fromPlayerId.compareTo(toPlayerId) < 0 ? fromPlayerId : toPlayerId;
+        String secondId = fromPlayerId.compareTo(toPlayerId) < 0 ? toPlayerId : fromPlayerId;
+
+        walletRepository.findByPlayerIdWithPessimisticLock(firstId);
+        walletRepository.findByPlayerIdWithPessimisticLock(secondId);
+
+        // Debit source wallet
+        debit(fromPlayerId, amount, TransactionReason.PLAYER_TRANSFER, toPlayerId.toString(), "Transfer to " + toPlayerId);
+
+        // Credit target wallet
+        credit(toPlayerId, amount, TransactionReason.PLAYER_TRANSFER, fromPlayerId.toString(), "Transfer from " + fromPlayerId);
+    }
+
+    @Transactional(readOnly = true)
+    public AuditResponse auditWallet(String playerId) {
+        Wallet wallet = walletRepository.findByPlayerId(playerId)
+                .orElseThrow(() -> new WalletNotFoundException("Wallet not found for player: " + playerId));
+
+        List<WalletTransaction> transactions = transactionRepository.findAllByWalletId(wallet.getId());
+        BigDecimal ledgerSum = transactions.stream()
+                .map(WalletTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        boolean isReconciled = wallet.getBalance().compareTo(ledgerSum) == 0;
+
+        return AuditResponse.builder()
+                .playerId(playerId)
+                .walletId(wallet.getId())
+                .snapshotBalance(wallet.getBalance())
+                .ledgerSum(ledgerSum)
+                .isReconciled(isReconciled)
+                .statusMessage(isReconciled ? "Wallet balance perfectly matches transaction ledger." : "DISCREPANCY DETECTED!")
+                .build();
     }
 }
