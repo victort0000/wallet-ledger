@@ -3,7 +3,6 @@ package com.altech.wallet;
 import com.altech.wallet.domain.model.TransactionReason;
 import com.altech.wallet.domain.repository.WalletRepository;
 import com.altech.wallet.domain.service.WalletService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,17 +25,11 @@ public class WalletConcurrencyTest {
     @Autowired
     private WalletRepository walletRepository;
 
-    private String playerId;
-
-    @BeforeEach
-    void setup() {
-        playerId = "WalletConcurrencyTest";
-        // Credit initial $100
-        walletService.credit(playerId, new BigDecimal("100.00"), TransactionReason.ADMIN_ADJUSTMENT, "INIT", "Initial setup");
-    }
+    private String playerId = "TestCon0001";
 
     @Test
     void testConcurrentDebitsPreventOverdraft() throws InterruptedException {
+        walletService.credit(playerId, new BigDecimal("100.00"), TransactionReason.ADMIN_ADJUSTMENT, "INIT", "Initial setup");
         int threadCount = 10;
         BigDecimal debitAmount = new BigDecimal("20.00"); // Total attempt: 10 * 20 = $200 (only 5 should succeed)
 
@@ -68,6 +61,6 @@ public class WalletConcurrencyTest {
         assertEquals(5, failureCount.get(), "5 debits should fail due to insufficient funds");
 
         BigDecimal finalBalance = walletRepository.findByPlayerId(playerId).orElseThrow().getBalance();
-        assertEquals(0, new BigDecimal("0.0000").compareTo(finalBalance), "Final balance must be exactly $0.00");
+        assertEquals(0, new BigDecimal("0.0000").compareTo(finalBalance), "Final balance must be exactly $0.00 " + finalBalance);
     }
 }

@@ -4,6 +4,7 @@ spring:
   flyway:
     enabled: false
 
+
   datasource:
     url: jdbc:postgresql://localhost:5432/wallet_db
     username: wallet_user

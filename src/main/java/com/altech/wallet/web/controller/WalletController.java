@@ -2,6 +2,7 @@ package com.altech.wallet.web.controller;
 
 import com.altech.wallet.domain.model.WalletTransaction;
 import com.altech.wallet.domain.service.WalletService;
+import com.altech.wallet.infrastructure.idempotency.Idempotent;
 import com.altech.wallet.web.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,25 +30,15 @@ public class WalletController {
     }
 
     @PostMapping("/{playerId}/credit")
+    @Idempotent
     @Operation(summary = "Credit money to player wallet")
+    @Transactional
     public ResponseEntity<WalletTransaction> credit(
             @PathVariable String playerId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreditRequest request) {
 
         WalletTransaction tx = walletService.credit(
-                playerId, request.getAmount(), request.getReason(), request.getReferenceId(), request.getDescription());
-        return ResponseEntity.ok(tx);
-    }
-
-    @PostMapping("/{playerId}/debit")
-    @Operation(summary = "Debit money from player wallet")
-    public ResponseEntity<WalletTransaction> debit(
-            @PathVariable String playerId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Valid @RequestBody DebitRequest request) {
-
-        WalletTransaction tx = walletService.debit(
                 playerId, request.getAmount(), request.getReason(), request.getReferenceId(), request.getDescription());
         return ResponseEntity.ok(tx);
     }
@@ -64,7 +56,9 @@ public class WalletController {
     }
 
     @PostMapping("/transfer")
+    @Idempotent
     @Operation(summary = "Atomically transfer currency between two players")
+    @Transactional
     public ResponseEntity<String> transfer(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody TransferRequest request) {
@@ -73,9 +67,22 @@ public class WalletController {
         return ResponseEntity.ok("Transfer completed successfully");
     }
 
-    @GetMapping("/{playerId}/audit")
-    @Operation(summary = "Audit wallet balance against ledger entry sum")
-    public ResponseEntity<AuditResponse> auditWallet(@PathVariable String playerId) {
-        return ResponseEntity.ok(walletService.auditWallet(playerId));
+    @PostMapping("/{playerId}/debit")
+    @Idempotent
+    @Operation(summary = "Debit money from player wallet with idempotency support")
+    @Transactional
+    public ResponseEntity<WalletTransaction> debit(
+            @PathVariable String playerId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody DebitRequest request) {
+
+        WalletTransaction tx = walletService.debit(
+                playerId,
+                request.getAmount(),
+                request.getReason(),
+                request.getReferenceId(),
+                request.getDescription()
+        );
+        return ResponseEntity.ok(tx);
     }
 }

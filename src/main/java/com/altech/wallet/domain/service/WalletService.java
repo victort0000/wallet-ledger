@@ -3,7 +3,6 @@ package com.altech.wallet.domain.service;
 import com.altech.wallet.domain.model.*;
 import com.altech.wallet.domain.repository.WalletRepository;
 import com.altech.wallet.domain.repository.WalletTransactionRepository;
-import com.altech.wallet.web.dto.AuditResponse;
 import com.altech.wallet.web.dto.BalanceResponse;
 import com.altech.wallet.web.exception.WalletNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -86,10 +84,18 @@ public class WalletService {
                 .id(UUID.randomUUID())
                 .playerId(playerId)
                 .balance(BigDecimal.ZERO)
-                .currency("USD")
                 .build();
         return walletRepository.save(newWallet);
     }
+
+    @Transactional
+    public void ClearWalletBalanceForPlayer(String playerId) {
+        BigDecimal Balance = walletRepository.findByPlayerId(playerId).orElseThrow().getBalance();
+        if(Balance.compareTo(BigDecimal.ZERO)>0) {
+            debit(playerId, Balance, TransactionReason.ADMIN_ADJUSTMENT, "CLEAR", "Clear Balance");
+        }
+    }
+
     @Transactional(readOnly = true)
     public BalanceResponse getBalance(String playerId) {
         Wallet wallet = walletRepository.findByPlayerId(playerId)
@@ -100,7 +106,6 @@ public class WalletService {
                 .playerId(wallet.getPlayerId())
                 .balance(wallet.getBalance())
                 .reservedBalance(BigDecimal.ZERO)
-                .currency(wallet.getCurrency())
                 .updatedAt(wallet.getUpdatedAt())
                 .build();
     }
@@ -130,28 +135,6 @@ public class WalletService {
         debit(fromPlayerId, amount, TransactionReason.PLAYER_TRANSFER, toPlayerId, "Transfer to " + toPlayerId + " : " + description);
 
         // Credit target wallet
-        credit(toPlayerId, amount, TransactionReason.PLAYER_TRANSFER, fromPlayerId, "Transfer from " + fromPlayerId+ " : " + description);
-    }
-
-    @Transactional(readOnly = true)
-    public AuditResponse auditWallet(String playerId) {
-        Wallet wallet = walletRepository.findByPlayerId(playerId)
-                .orElseThrow(() -> new WalletNotFoundException("Wallet not found for player: " + playerId));
-
-        List<WalletTransaction> transactions = transactionRepository.findAllByWalletId(wallet.getId());
-        BigDecimal ledgerSum = transactions.stream()
-                .map(WalletTransaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        boolean isReconciled = wallet.getBalance().compareTo(ledgerSum) == 0;
-
-        return AuditResponse.builder()
-                .playerId(playerId)
-                .walletId(wallet.getId())
-                .snapshotBalance(wallet.getBalance())
-                .ledgerSum(ledgerSum)
-                .isReconciled(isReconciled)
-                .statusMessage(isReconciled ? "Wallet balance perfectly matches transaction ledger." : "DISCREPANCY DETECTED!")
-                .build();
+        credit(toPlayerId, amount, TransactionReason.PLAYER_TRANSFER, fromPlayerId, "Transfer from " + fromPlayerId + " : " + description);
     }
 }

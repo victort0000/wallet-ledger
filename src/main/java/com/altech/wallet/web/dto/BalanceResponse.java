@@ -19,6 +19,5 @@ public class BalanceResponse {
     private String playerId;
     private BigDecimal balance;
     private BigDecimal reservedBalance;
-    private String currency;
     private Instant updatedAt;
 }
